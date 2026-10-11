@@ -78,7 +78,9 @@ class BorrowController extends Controller
             'dateBorrowed' => ['required', 'date'],
             'returnDate' => ['required', 'date'],
             'borrowItems' => ['required', 'array', 'min:1'],
+            'borrowItems.*' => ['required', 'integer'],
             'borrowQuantities' => ['required', 'array', 'min:1'],
+            'borrowQuantities.*' => ['required', 'integer', 'min:1'],
         ]);
 
         $manila = 'Asia/Manila';

@@ -45,7 +45,7 @@ class InventoryAvailabilityService
     public static function snapshot(int $equipmentId): ?array
     {
         $inventory = Inventory::find($equipmentId);
-        if (!$inventory) {
+        if (! $inventory) {
             return null;
         }
 
@@ -112,7 +112,7 @@ class InventoryAvailabilityService
     public static function effectiveAvailability(int $equipmentId, ?string $borrowDate = null, ?string $returnDate = null, ?string $excludeRefnum = null): ?array
     {
         $snapshot = self::snapshot($equipmentId);
-        if (!$snapshot) {
+        if (! $snapshot) {
             return null;
         }
 
@@ -120,7 +120,7 @@ class InventoryAvailabilityService
         $futureReturns = 0;
         $reservedOverlap = 0;
 
-        if (!empty($borrowDate)) {
+        if (! empty($borrowDate)) {
             $futureReturns = (int) BorrowItem::query()
                 ->join('transactions', 'borrow_items.refnum', '=', 'transactions.refnum')
                 ->where('borrow_items.equipment_id', $equipmentId)
@@ -131,18 +131,17 @@ class InventoryAvailabilityService
 
         $effectiveAvailable = $currentAvailable + $futureReturns;
 
-        if (!empty($borrowDate) && !empty($returnDate)) {
+        if (! empty($borrowDate) && ! empty($returnDate)) {
+            $borrowDay = Carbon::parse($borrowDate)->toDateString();
+            $returnDay = Carbon::parse($returnDate)->toDateString();
             $query = BorrowItem::query()
                 ->join('transactions', 'borrow_items.refnum', '=', 'transactions.refnum')
                 ->where('borrow_items.equipment_id', $equipmentId)
                 ->where('transactions.status', 'pending')
-                ->where(function ($q) use ($borrowDate, $returnDate) {
-                    // NOT (returnDate <= borrowDate OR dateBorrowed >= returnDate)
-                    $q->where('transactions.returnDate', '>', $borrowDate)
-                        ->where('transactions.dateBorrowed', '<', $returnDate);
-                });
+                ->whereDate('transactions.returnDate', '>=', $borrowDay)
+                ->whereDate('transactions.dateBorrowed', '<=', $returnDay);
 
-            if (!empty($excludeRefnum)) {
+            if (! empty($excludeRefnum)) {
                 $query->where('transactions.refnum', '!=', $excludeRefnum);
             }
 

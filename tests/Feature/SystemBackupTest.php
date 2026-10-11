@@ -84,6 +84,30 @@ class SystemBackupTest extends TestCase
         }
     }
 
+    public function test_backup_only_includes_tables_from_the_current_database_schema(): void
+    {
+        DB::statement("ATTACH DATABASE ':memory:' AS legacy_schema");
+        DB::statement('CREATE TABLE legacy_schema.account_access (user_id INTEGER, access_level INTEGER)');
+        $path = null;
+
+        try {
+            $path = app(SystemBackupService::class)->create();
+
+            $archive = new ZipArchive;
+            $this->assertSame(true, $archive->open($path));
+            $manifest = json_decode($archive->getFromName('manifest.json'), true, 512, JSON_THROW_ON_ERROR);
+            $archive->close();
+
+            $this->assertArrayNotHasKey('account_access', $manifest['tables']);
+        } finally {
+            if ($path !== null && file_exists($path)) {
+                unlink($path);
+            }
+
+            DB::statement('DETACH DATABASE legacy_schema');
+        }
+    }
+
     public function test_restore_replaces_current_records_and_managed_images(): void
     {
         DB::table('roles')->insert(['role_name' => 'Admin']);

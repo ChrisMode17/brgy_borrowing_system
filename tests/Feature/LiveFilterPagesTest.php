@@ -176,6 +176,36 @@ class LiveFilterPagesTest extends TestCase
             ->assertDontSee('<html', false);
     }
 
+    public function test_inventory_data_can_return_all_items_for_the_borrow_form(): void
+    {
+        $this->authenticateAdmin();
+        $categoryId = DB::table('inventory_categories')->insertGetId(['category_name' => 'Equipment']);
+
+        for ($index = 1; $index <= 12; $index++) {
+            $equipmentId = DB::table('inventory')->insertGetId([
+                'name' => "Equipment {$index}",
+                'category_id' => $categoryId,
+                'total_quantity' => 1,
+            ]);
+            DB::table('inventory_status')->insert([
+                'equipment_id' => $equipmentId,
+                'status' => 'available',
+                'quantity' => 1,
+            ]);
+        }
+
+        $this->getJson(route('inventory.data'))
+            ->assertOk()
+            ->assertJsonCount(10, 'items')
+            ->assertJsonPath('pagination.lastPage', 2);
+
+        $this->getJson(route('inventory.data', ['all' => 1]))
+            ->assertOk()
+            ->assertJsonCount(12, 'items')
+            ->assertJsonFragment(['name' => 'Equipment 12'])
+            ->assertJsonPath('pagination.lastPage', 1);
+    }
+
     public function test_audit_trail_page_uses_live_filters_and_returns_filtered_partial(): void
     {
         $this->authenticateAdmin();

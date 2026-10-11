@@ -25,20 +25,21 @@ class InventoryController extends Controller
         $borrowDate = $request->query('borrowDate');
         $returnDate = $request->query('returnDate');
         $page = max(1, (int) $request->query('page', 1));
+        $includeAllItems = $request->boolean('all');
 
         if ($borrowDate) {
-            $borrowDate = str_replace('T', ' ', $borrowDate) . ':00';
+            $borrowDate = str_replace('T', ' ', $borrowDate).':00';
         }
         if ($returnDate) {
-            $returnDate = str_replace('T', ' ', $returnDate) . ':00';
+            $returnDate = str_replace('T', ' ', $returnDate).':00';
         }
 
         $query = Inventory::query()->with('category');
         if ($category !== '') {
-            $query->whereHas('category', fn($q) => $q->where('category_name', $category));
+            $query->whereHas('category', fn ($q) => $q->where('category_name', $category));
         }
         if ($search !== '') {
-            $query->whereRaw('LOWER(name) LIKE ?', ['%' . strtolower($search) . '%']);
+            $query->whereRaw('LOWER(name) LIKE ?', ['%'.strtolower($search).'%']);
         }
 
         $items = [];
@@ -76,11 +77,17 @@ class InventoryController extends Controller
 
         $perPage = 10;
         $total = count($items);
-        $lastPage = max(1, (int) ceil($total / $perPage));
-        $page = min($page, $lastPage);
+        if ($includeAllItems) {
+            $page = 1;
+            $perPage = max($perPage, $total);
+            $lastPage = 1;
+        } else {
+            $lastPage = max(1, (int) ceil($total / $perPage));
+            $page = min($page, $lastPage);
+        }
 
         return response()->json([
-            'items' => array_slice($items, ($page - 1) * $perPage, $perPage),
+            'items' => $includeAllItems ? $items : array_slice($items, ($page - 1) * $perPage, $perPage),
             'pagination' => [
                 'currentPage' => $page,
                 'lastPage' => $lastPage,

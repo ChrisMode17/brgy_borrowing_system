@@ -59,7 +59,7 @@
                                     <option :value="item.id" x-text="`${item.name} (${item.futureAvailable ?? item.availableQuantity} available)`"></option>
                                 </template>
                             </select>
-                            <input type="number" :name="'borrowQuantities[]'" x-model="row.quantity" min="1" required class="w-24 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                            <input type="number" :name="'borrowQuantities[]'" x-model="row.quantity" min="1" :max="availableQuantityForRow(row, index)" required class="w-24 rounded-lg border border-slate-300 px-3 py-2 text-sm">
                             <button type="button" @click="rows.splice(index, 1)" class="text-rose-500 px-2" x-show="rows.length > 1">✕</button>
                         </div>
                     </template>
@@ -142,6 +142,20 @@
                 issuePagination: { currentPage: 1, lastPage: 1, total: 0, from: 0, to: 0 },
                 issueLookupSequence: 0,
                 addRow() { this.rows.push({ equipment_id: '', quantity: 1 }); },
+                availableQuantityForRow(row, index) {
+                    const item = this.items.find(item => String(item.id) === String(row.equipment_id));
+                    if (!item) return 0;
+
+                    const alreadySelected = this.rows.reduce((quantity, selectedRow, selectedIndex) => {
+                        if (selectedIndex === index || String(selectedRow.equipment_id) !== String(row.equipment_id)) {
+                            return quantity;
+                        }
+
+                        return quantity + (Number(selectedRow.quantity) || 0);
+                    }, 0);
+
+                    return Math.max(0, Number(item.futureAvailable ?? item.availableQuantity) - alreadySelected);
+                },
                 invalidateReturnIssues() {
                     this.issueLookupSequence++;
                     this.returnIssues = [];
@@ -243,6 +257,7 @@
                     const params = new URLSearchParams();
                     if (this.borrowDate) params.set('borrowDate', this.borrowDate);
                     if (this.returnDateVal) params.set('returnDate', this.returnDateVal);
+                    params.set('all', '1');
                     const res = await fetch(`{{ route('inventory.data') }}?${params}`);
                     const data = await res.json();
                     this.items = (data.items ?? []).filter(i => (i.futureAvailable ?? i.availableQuantity) > 0);

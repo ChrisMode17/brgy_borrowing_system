@@ -44,7 +44,7 @@ class SystemBackupService
 
         $archive = new ZipArchive;
         if ($archive->open($archivePath, ZipArchive::OVERWRITE) !== true) {
-            unlink($archivePath);
+            $this->deleteTemporaryArchive($archivePath);
 
             throw new RuntimeException('Unable to open a temporary system backup archive.');
         }
@@ -89,18 +89,25 @@ class SystemBackupService
             }
         } catch (Throwable $exception) {
             $archive->close();
-            unlink($archivePath);
+            $this->deleteTemporaryArchive($archivePath);
 
             throw $exception;
         }
 
         if (! $archive->close()) {
-            unlink($archivePath);
+            $this->deleteTemporaryArchive($archivePath);
 
             throw new RuntimeException('Unable to finish the system backup archive.');
         }
 
         return $archivePath;
+    }
+
+    private function deleteTemporaryArchive(string $archivePath): void
+    {
+        if (! @unlink($archivePath) && file_exists($archivePath)) {
+            throw new RuntimeException('Unable to remove a temporary system backup.');
+        }
     }
 
     public function restore(string $archivePath): void
@@ -168,7 +175,10 @@ class SystemBackupService
     private function applicationTables(): array
     {
         $tables = array_values(array_filter(
-            Schema::getTableListing(schemaQualified: false),
+            Schema::getTableListing(
+                Schema::getCurrentSchemaListing(),
+                schemaQualified: false
+            ),
             static fn (string $table): bool => ! in_array($table, self::EXCLUDED_TABLES, true)
         ));
 

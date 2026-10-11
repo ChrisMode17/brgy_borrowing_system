@@ -41,7 +41,46 @@ class TransactionService
             return ['success' => false, 'message' => 'Please add at least one item.'];
         }
 
-        return DB::transaction(function () use ($fname, $lname, $address, $contact, $dateBorrowedDb, $returnDateDb, $items) {
+        $quantitiesByEquipment = [];
+        foreach ($items as $row) {
+            $equipmentId = (int) $row['equipment_id'];
+            $quantity = (int) $row['quantity'];
+            if ($quantity <= 0) {
+                return ['success' => false, 'message' => 'Each item quantity must be greater than zero.'];
+            }
+
+            $quantitiesByEquipment[$equipmentId] = ($quantitiesByEquipment[$equipmentId] ?? 0) + $quantity;
+        }
+        ksort($quantitiesByEquipment, SORT_NUMERIC);
+
+        return DB::transaction(function () use ($fname, $lname, $address, $contact, $dateBorrowedDb, $returnDateDb, $quantitiesByEquipment) {
+            $inventories = [];
+            foreach (array_keys($quantitiesByEquipment) as $equipmentId) {
+                $inventory = Inventory::query()
+                    ->whereKey($equipmentId)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $inventory) {
+                    throw new \RuntimeException('One of the selected items no longer exists.');
+                }
+
+                $inventories[$equipmentId] = $inventory;
+            }
+
+            foreach ($quantitiesByEquipment as $equipmentId => $quantity) {
+                $availability = InventoryAvailabilityService::effectiveAvailability($equipmentId, $dateBorrowedDb, $returnDateDb);
+                $effectiveAvailable = $availability['effectiveAvailable'] ?? 0;
+
+                if ($quantity <= 0 || $quantity > $effectiveAvailable) {
+                    $inventory = $inventories[$equipmentId];
+                    $msg = $effectiveAvailable <= 0
+                        ? "Cannot reserve {$quantity} {$inventory->name}. No units are available during your requested borrow dates due to other reservations."
+                        : "Cannot reserve {$quantity} {$inventory->name}. Only {$effectiveAvailable} unit(s) available during your requested borrow dates.";
+                    throw new \RuntimeException($msg);
+                }
+            }
+
             $refnum = ReferenceNumberGenerator::generate();
             $borrowerId = self::findOrCreateBorrower($fname, $lname, $address, $contact);
 
@@ -54,26 +93,9 @@ class TransactionService
             ]);
 
             $summaries = [];
-            foreach ($items as $row) {
-                $equipmentId = (int) $row['equipment_id'];
-                $quantity = (int) $row['quantity'];
-
-                $inventory = Inventory::find($equipmentId);
-                if (! $inventory) {
-                    throw new \RuntimeException('One of the selected items no longer exists.');
-                }
-
-                $availability = InventoryAvailabilityService::effectiveAvailability($equipmentId, $dateBorrowedDb, $returnDateDb, $refnum);
-                $effectiveAvailable = $availability['effectiveAvailable'] ?? 0;
-
-                if ($quantity <= 0 || $quantity > $effectiveAvailable) {
-                    $msg = $effectiveAvailable <= 0
-                        ? "Cannot reserve {$quantity} {$inventory->name}. No units are available during your requested borrow dates due to other reservations."
-                        : "Cannot reserve {$quantity} {$inventory->name}. Only {$effectiveAvailable} unit(s) available during your requested borrow dates.";
-                    throw new \RuntimeException($msg);
-                }
-
+            foreach ($quantitiesByEquipment as $equipmentId => $quantity) {
                 BorrowItem::create(['refnum' => $refnum, 'equipment_id' => $equipmentId, 'quantity' => $quantity]);
+                $inventory = $inventories[$equipmentId];
                 $summaries[] = "{$inventory->name} x{$quantity}";
             }
 
@@ -115,6 +137,14 @@ class TransactionService
         }
 
         return DB::transaction(function () use ($refnum, $transaction, $items) {
+            $equipmentIds = $items->pluck('equipment_id')->filter()->unique()->sort()->values();
+            foreach ($equipmentIds as $equipmentId) {
+                Inventory::query()
+                    ->whereKey($equipmentId)
+                    ->lockForUpdate()
+                    ->first();
+            }
+
             foreach ($items as $item) {
                 $availability = InventoryAvailabilityService::effectiveAvailability(
                     $item->equipment_id,
