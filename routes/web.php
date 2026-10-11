@@ -74,6 +74,7 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/users', [ManageUsersController::class, 'index'])->name('users.index');
         Route::post('/users', [ManageUsersController::class, 'store'])->name('users.store');
+        Route::post('/users/{user}/promote', [ManageUsersController::class, 'promote'])->name('users.promote');
         Route::put('/users/{user}', [ManageUsersController::class, 'update'])->name('users.update');
         Route::delete('/users/{user}', [ManageUsersController::class, 'destroy'])->name('users.destroy');
 

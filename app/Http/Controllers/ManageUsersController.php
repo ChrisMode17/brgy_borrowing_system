@@ -6,8 +6,10 @@ use App\Models\Role;
 use App\Models\User;
 use App\Services\AuditLogger;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -133,6 +135,59 @@ class ManageUsersController extends Controller
         AuditLogger::log('Edited information of user', 'User', 'Edited information of user');
 
         return back()->with('success', 'User updated successfully');
+    }
+
+    public function promote(User $user): RedirectResponse
+    {
+        $currentUser = Auth::user();
+
+        if ($currentUser->access_level !== 0 || $currentUser->roleName() !== 'Admin') {
+            return back()->with('error', 'Only the current Admin can transfer Admin access.');
+        }
+
+        if ($user->user_id === $currentUser->user_id || $user->access_level !== 1) {
+            return back()->with('error', 'Only a Semi-Admin can be promoted.');
+        }
+
+        $userRole = Role::firstOrCreate(['role_name' => 'User']);
+        $adminRole = Role::firstOrCreate(['role_name' => 'Admin']);
+
+        $transferred = DB::transaction(function () use ($currentUser, $user, $userRole, $adminRole): bool {
+            $lockedCurrentUser = User::query()->lockForUpdate()->findOrFail($currentUser->user_id);
+            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->user_id);
+
+            if (
+                $lockedCurrentUser->access_level !== 0
+                || $lockedCurrentUser->role_id !== $adminRole->role_id
+                || $lockedUser->access_level !== 1
+            ) {
+                return false;
+            }
+
+            $lockedCurrentUser->update([
+                'role_id' => $userRole->role_id,
+                'access_level' => 1,
+            ]);
+            $lockedUser->update([
+                'role_id' => $adminRole->role_id,
+                'access_level' => 0,
+            ]);
+
+            return true;
+        });
+
+        if (! $transferred) {
+            return back()->with('error', 'The Admin transfer is no longer available. Refresh the page and try again.');
+        }
+
+        AuditLogger::log(
+            'Transferred Admin access',
+            'User',
+            "{$user->username} is now Admin; {$currentUser->username} is now Semi-Admin"
+        );
+        Auth::setUser($currentUser->fresh('role'));
+
+        return back()->with('success', "{$user->first_name} {$user->last_name} is now the Admin. Your account is now a Semi-Admin.");
     }
 
     public function destroy(User $user)

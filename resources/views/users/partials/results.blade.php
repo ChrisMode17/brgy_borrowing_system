@@ -36,13 +36,22 @@
                     <div class="flex items-center gap-3"><span class="text-slate-400">☎</span><span>{{ $u->contact_number }}</span></div>
                     <div class="flex items-center gap-3"><span class="text-slate-400">🆔</span><span>{{ $u->access_level }}</span></div>
                 </div>
-                <div class="mt-4 flex gap-2">
-                    @if (auth()->user()->canManage($u->access_level))
-                        <button @click='editing = @json($u)' class="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700">Edit</button>
-                        @if ($u->user_id !== auth()->id())
-                            <form method="POST" action="{{ route('users.destroy', $u->user_id) }}" class="flex-1" onsubmit="return confirm('Delete this user?')">
+                @php
+                    $canPromote = auth()->user()->access_level === 0 && $u->access_level === 1;
+                    $canManage = auth()->user()->canManage($u->access_level);
+                    $canDelete = $canManage && $u->user_id !== auth()->id();
+                    $actionCount = ($canPromote ? 1 : 0) + ($canManage ? 1 : 0) + ($canDelete ? 1 : 0);
+                @endphp
+                <div class="mt-4 grid gap-2 {{ $actionCount === 3 ? 'grid-cols-3' : ($actionCount === 2 ? 'grid-cols-2' : 'grid-cols-1') }}">
+                    @if ($canPromote)
+                        <button @click='promoting = @json($u)' aria-label="Promote {{ $displayName }} to Admin" class="min-h-11 w-full rounded-lg bg-amber-600 px-2 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-700">Promote</button>
+                    @endif
+                    @if ($canManage)
+                        <button @click='editing = @json($u)' class="min-h-11 w-full rounded-lg bg-blue-600 px-2 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700">Edit</button>
+                        @if ($canDelete)
+                            <form method="POST" action="{{ route('users.destroy', $u->user_id) }}" class="w-full" onsubmit="return confirm('Delete this user?')">
                                 @csrf @method('DELETE')
-                                <button class="w-full rounded-lg bg-red-500 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-600">Delete</button>
+                                <button class="min-h-11 w-full rounded-lg bg-red-500 px-2 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-600">Delete</button>
                             </form>
                         @endif
                     @endif

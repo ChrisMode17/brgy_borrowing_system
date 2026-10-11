@@ -147,6 +147,37 @@ class LiveFilterPagesTest extends TestCase
             ->assertDontSee('<html', false);
     }
 
+    public function test_admin_can_transfer_admin_access_to_a_semi_admin(): void
+    {
+        $currentAdmin = $this->authenticateAdmin();
+        $userRole = Role::query()->create(['role_name' => 'User']);
+        $semiAdmin = User::query()->create([
+            'first_name' => 'Future',
+            'last_name' => 'Admin',
+            'username' => 'futureadmin',
+            'password' => 'password',
+            'email' => 'future@example.com',
+            'contact_number' => '1234567890',
+            'role_id' => $userRole->role_id,
+            'access_level' => 1,
+        ]);
+
+        $this->post(route('users.promote', $semiAdmin))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('users', [
+            'user_id' => $currentAdmin->user_id,
+            'role_id' => $userRole->role_id,
+            'access_level' => 1,
+        ]);
+        $this->assertDatabaseHas('users', [
+            'user_id' => $semiAdmin->user_id,
+            'role_id' => $currentAdmin->role_id,
+            'access_level' => 0,
+        ]);
+    }
+
     public function test_manage_equipment_page_uses_live_filters_and_returns_filtered_partial(): void
     {
         $this->authenticateAdmin();

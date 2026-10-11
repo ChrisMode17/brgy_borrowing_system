@@ -1,5 +1,5 @@
 <x-layouts.app :title="'Manage Users'">
-    <div class="space-y-5" x-data="{ showAdd: false, editing: null }">
+    <div class="space-y-5" x-data="{ showAdd: false, editing: null, promoting: null }">
         <div class="flex items-center justify-between flex-wrap gap-3">
             <div>
                 <h2 class="text-2xl font-bold text-slate-900">Manage Users</h2>
@@ -27,6 +27,26 @@
         <p id="users-filter-error" class="hidden rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert"></p>
 
         @include('users.partials.results')
+
+        <!-- Admin transfer confirmation modal -->
+        <div x-show="promoting" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="promoting = null">
+            <div class="w-full max-w-md space-y-4 rounded-xl bg-white p-6 shadow-xl" x-show="promoting">
+                <div>
+                    <h3 class="text-lg font-semibold text-slate-900">Transfer Admin access?</h3>
+                    <p class="mt-2 text-sm leading-6 text-slate-600">
+                        This will make <strong x-text="promoting?.first_name + ' ' + promoting?.last_name"></strong> the Admin.
+                        Your account will become a Semi-Admin and will no longer be the Admin.
+                    </p>
+                </div>
+                <form :action="promoting ? `/users/${promoting.user_id}/promote` : ''" method="POST">
+                    @csrf
+                    <div class="flex justify-end gap-2">
+                        <button type="button" @click="promoting = null" class="rounded-lg border border-slate-300 px-4 py-2 text-sm">Cancel</button>
+                        <button type="submit" class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Yes, transfer Admin</button>
+                    </div>
+                </form>
+            </div>
+        </div>
 
         <!-- Add modal -->
         <div x-show="showAdd" x-cloak class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" @click.self="showAdd = false">

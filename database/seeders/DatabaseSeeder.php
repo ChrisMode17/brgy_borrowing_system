@@ -7,6 +7,7 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use RuntimeException;
 
 class DatabaseSeeder extends Seeder
 {
@@ -19,14 +20,18 @@ class DatabaseSeeder extends Seeder
             InventoryCategory::firstOrCreate(['category_name' => $category]);
         }
 
-        // Default admin account -- change the password immediately after first login.
+        $adminPassword = config('app.initial_admin.password');
+        if (app()->isProduction() && blank($adminPassword)) {
+            throw new RuntimeException('INITIAL_ADMIN_PASSWORD must be set before seeding production.');
+        }
+
         User::firstOrCreate(
-            ['username' => 'admin'],
+            ['username' => config('app.initial_admin.username')],
             [
                 'first_name' => 'System',
                 'last_name' => 'Admin',
-                'email' => 'admin@example.com',
-                'password' => Hash::make('admin123'),
+                'email' => config('app.initial_admin.email'),
+                'password' => Hash::make($adminPassword ?: 'admin123'),
                 'contact_number' => '09171234567',
                 'role_id' => $adminRole->role_id,
                 'access_level' => 0,

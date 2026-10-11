@@ -105,6 +105,12 @@ return [
         ),
     ],
 
+    'initial_admin' => [
+        'username' => env('INITIAL_ADMIN_USERNAME', 'admin'),
+        'email' => env('INITIAL_ADMIN_EMAIL', 'admin@example.com'),
+        'password' => env('INITIAL_ADMIN_PASSWORD'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Maintenance Mode Driver
